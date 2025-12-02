@@ -22,7 +22,7 @@ print "Line not skipped!"
 print "Line not skipped!"
 print "Line not skipped!"
 
-# Abort the program if user is a fetus (pun intended)
+# Abort the program if user has not yet been born (pun intended)
 if age < 0 {
     END
 }
