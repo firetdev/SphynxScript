@@ -1,3 +1,5 @@
+// TODO: Add if statements, while loops, and functions in the future.
+
 #include <iostream>
 #include <string>
 #include <vector>
