@@ -1,4 +1,4 @@
-// TODO: Add if statements, while loops, and functions in the future.
+// TODO: Add while loops and functions
 
 #include <iostream>
 #include <string>
