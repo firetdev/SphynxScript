@@ -1,11 +1,26 @@
 # Example SphynxScript program to showcase features
 
+# Functions have not yet been added, but you can simulate them with GOTOs
+GOTO 8
+println "This is a simulated function"
+GOTO 48
+
 print "Enter your name: "
 var name = input
 print "Enter your age: "
 var age = input
 var timeUntilAdult = 18 - age
 println "You will be an adult in ${timeUntilAdult} years, ${name}!"
+
+# Should skip some lines
+GOTO 25
+
+print "Line not skipped!"
+print "Line not skipped!"
+print "Line not skipped!"
+print "Line not skipped!"
+print "Line not skipped!"
+print "Line not skipped!"
 
 # Abort the program if user is a fetus (pun intended)
 if age < 0 {
@@ -26,5 +41,8 @@ if age >= 18 {
     println "ADULT"
 }
 println "SEPARATOR2"
+
+# Run our simulated function
+GOTO 5
 
 END

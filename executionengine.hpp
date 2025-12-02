@@ -63,6 +63,8 @@ private:
 
     const std::regex endRegex = std::regex(R"(^\s*END\s*$)"); // Matches: END
 
+    const std::regex gotoRegex = std::regex(R"(^\s*GOTO\s+(\d+)\s*$)");
+
     // Helpers
     void jumpToLine(int targetLine);
     int findBlockEnd(int startLine);
@@ -104,6 +106,13 @@ public:
             // Skip empty lines
             if (line.empty() || std::regex_match(line, std::regex(R"(^\s*$)"))) {
                 programCounter++;
+                continue;
+            }
+
+            // GOTO
+            if (std::regex_match(line, match, gotoRegex)) {
+                int targetLine = std::stoi(match[1].str());
+                jumpToLine(targetLine);
                 continue;
             }
             
