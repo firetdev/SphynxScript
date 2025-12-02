@@ -1,0 +1,6 @@
+print "Enter your name: "
+var name = input
+print "Enter your age: "
+var age = input
+var timeUntilAdult = 18 - age
+println "You will be an adult in ${timeUntilAdult} years, ${name}!"
