@@ -158,52 +158,6 @@ int main() {
 
     file.close();
 
-    //
-    // EVAL EXAMPLES
-    //
-
-    /*// Example 1: Math with precedence
-    std::string expr1 = "5 + 2 * (10 - 4) / 3"; // 5 + 2 * 6 / 3 = 5 + 12 / 3 = 5 + 4 = 9
-    EvalResult res1 = eval.evaluate(expr1);
-    std::cout << "Expression: " << expr1 << std::endl;
-    std::cout << "Result: " << res1.value << " (Type: " << res1.type << ")" << std::endl;
-    std::cout << "---" << std::endl;
-
-    // Example 2: Booleans and Logic
-    std::string expr2 = "(5 > 2 || false) && (10 == 10.0)"; // (true || false) && true = true && true = true
-    EvalResult res2 = eval.evaluate(expr2);
-    std::cout << "Expression: " << expr2 << std::endl;
-    std::cout << "Result: " << res2.value << " (Type: " << res2.type << ")" << std::endl;
-    std::cout << "---" << std::endl;
-
-    // Example 3: String concatenation
-    std::string expr3 = R"("Hello" + " " + "World!")";
-    EvalResult res3 = eval.evaluate(expr3);
-    std::cout << "Expression: " << expr3 << std::endl;
-    std::cout << "Result: " << res3.value << " (Type: " << res3.type << ")" << std::endl;
-    std::cout << "---" << std::endl;
-
-    // Example 4: Unary operators and floats
-    std::string expr4 = "!true || -5.5 * -2"; // false || 11.0 = true
-    EvalResult res4 = eval.evaluate(expr4);
-    std::cout << "Expression: " << expr4 << std::endl;
-    std::cout << "Result: " << res4.value << " (Type: " << res4.type << ")" << std::endl;
-    std::cout << "---" << std::endl;
-
-    // Example 5: Syntax Error
-    std::string expr5 = "5 + (2 * 10";
-    EvalResult res5 = eval.evaluate(expr5);
-    std::cout << "Expression: " << expr5 << std::endl;
-    std::cout << "Result: " << res5.value << " (Type: " << res5.type << ")" << std::endl;
-    std::cout << "---" << std::endl;
-    
-    // Example 6: Type Error
-    std::string expr6 = "5 + \"hello\"";
-    EvalResult res6 = eval.evaluate(expr6);
-    std::cout << "Expression: " << expr6 << std::endl;
-    std::cout << "Result: " << res6.value << " (Type: " << res6.type << ")" << std::endl;
-    std::cout << "---" << std::endl;*/
-
     return 0;
 }
 
