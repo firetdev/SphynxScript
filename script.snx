@@ -1,3 +1,5 @@
+# Example SphynxScript program to showcase features
+
 print "Enter your name: "
 var name = input
 print "Enter your age: "
@@ -5,5 +7,24 @@ var age = input
 var timeUntilAdult = 18 - age
 println "You will be an adult in ${timeUntilAdult} years, ${name}!"
 
+# Abort the program if user is a fetus (pun intended)
+if age < 0 {
+    END
+}
+
 var isAdult = age >= 18
 println isAdult
+
+# Expected outputs:
+# For age < 18, "CHILD", "SEPARATOR1", "SEPARATOR2"
+# For age >= 18, "SEPARATOR1", "ADULT", "SEPARATOR2"
+if age < 18 {
+    println "CHILD"
+}
+println "SEPARATOR1"
+if age >= 18 {
+    println "ADULT"
+}
+println "SEPARATOR2"
+
+END
