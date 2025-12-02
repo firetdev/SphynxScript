@@ -45,4 +45,12 @@ println "SEPARATOR2"
 # Run our simulated function
 GOTO 5
 
+# Demostrate nested ifs
+if 5 == 5 {
+    if 6 == 7 {
+        println "6 = 7"
+    }
+    println "5 = 5"
+}
+
 END
