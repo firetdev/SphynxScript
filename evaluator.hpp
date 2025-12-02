@@ -341,11 +341,19 @@ private:
         }
 
         if (op == "<" || op == ">" || op == "<=" || op == ">=") {
-            if (!((lhs.type == "int" || lhs.type == "float") && (rhs.type == "int" || rhs.type == "float"))) {
+    
+            // Coerce both operands to a number if they are strings containing numbers
+            EvalResult L = coerceToNumber(lhs);
+            EvalResult R = coerceToNumber(rhs);
+            
+            if (!((L.type == "int" || L.type == "float") && (R.type == "int" || R.type == "float"))) {
+                // If coercion failed, throw the type error
                 throw std::runtime_error("Type Error: Operator '" + op + "' requires numerical operands");
             }
-            float l = lhs.asFloat();
-            float r = rhs.asFloat();
+            
+            // Now perform the comparison using the coerced numerical values
+            float l = L.asFloat();
+            float r = R.asFloat();
             bool result;
             if (op == "<") result = l < r;
             else if (op == ">") result = l > r;
