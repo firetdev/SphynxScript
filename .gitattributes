@@ -1,2 +1,1 @@
-*.snx linguist-language=C++
-*.snx linguist-detectable=true
+*.snx linguist-language=Python
