@@ -1,2 +1,3 @@
-*.snx linguist-language=python
+*.snx linguist-language=Python
 *.snx linguist-detectable=true
+*.snx text
