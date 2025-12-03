@@ -1,2 +1,2 @@
-*.snx linguist-language=ruby
+*.snx linguist-language=python
 *.snx linguist-detectable=true
