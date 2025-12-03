@@ -1,1 +1,2 @@
-*.snx linguist-language=GDScript
+*.snx linguist-language=Python
+*.snx linguist-detectable=true
