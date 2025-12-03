@@ -50,6 +50,8 @@ private:
     Evaluator eval;
     std::ifstream file;
 
+    std::string fileName;
+
     int programCounter = 1; // Tracks the current line number for context
     const std::map<int, std::streampos>& fileLineMap; // Reference to the line map
     
@@ -75,6 +77,7 @@ private:
 public:
     ExecutionEngine(const std::string& filename, const std::map<int, std::streampos>& lineMap) : fileLineMap(lineMap) {
         file.open(filename);
+        fileName = filename;
         if (!file.is_open()) {
             throw std::runtime_error("Failed to open script file: " + filename);
         }
@@ -212,7 +215,7 @@ int ExecutionEngine::findBlockEnd(int startLine) {
     int nestedLevel = 1; // We assume we are inside the block already (matched the opening '{')
 
     // Use a temporary file stream for safe parsing without disrupting the main execution stream
-    std::ifstream tempFile("script.snx"); 
+    std::ifstream tempFile(fileName); 
     
     // Jump the temporary file to the start of the block
     if (fileLineMap.count(startLine)) {
