@@ -19,7 +19,7 @@ LineMap buildLineMap(const std::string& filename) {
     std::ifstream file(filename);
 
     if (!file.is_open()) {
-        std::cerr << "Error: Could not open " << filename << " to build LineMap.\n";
+        std::cerr << "Error: Could not open " << filename << "\n";
         return lineMap;
     }
 
@@ -52,6 +52,7 @@ private:
 
     std::string fileName;
 
+    int scopeLevel = 0;  // Tracks current scope level
     int programCounter = 1; // Tracks the current line number for context
     const std::map<int, std::streampos>& fileLineMap; // Reference to the line map
     
@@ -60,12 +61,12 @@ private:
     const std::regex assignmentRegex = std::regex(R"(^\s*([a-zA-Z_]\w*)\s*=\s*(.*))");
     const std::regex printRegex = std::regex(R"(^\s*print\s+(.*))");
     const std::regex printlnRegex = std::regex(R"(^\s*println\s+(.*))");
-
     const std::regex ifRegex = std::regex(R"(^\s*if\s+(.*)\s*\{\s*$)");
 
+    // Control flow regexes
     const std::regex endRegex = std::regex(R"(^\s*END\s*$)"); // Matches: END
-
     const std::regex gotoRegex = std::regex(R"(^\s*GOTO\s+(\d+)\s*$)");
+    const std::regex closeBlockRegex = std::regex(R"(^\s*\}\s*$)");
 
     // Helpers
     void jumpToLine(int targetLine);
@@ -89,6 +90,30 @@ public:
         }
     }
 
+    void removeVariablesByScope() {
+        // Iterate through the map safely, handling element deletion.
+        for (auto it = variables.begin(); it != variables.end(); ) {
+            if (it->second.scopeLevel >= scopeLevel) {
+                it = variables.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    void incrementScope() {
+        scopeLevel++;
+    }
+
+    void decrementScope() {
+        if (scopeLevel > 0) {
+            removeVariablesByScope(); 
+            scopeLevel--;
+        } else {
+            std::cout << "Warning: Attempted to decrement scope below 0." << std::endl;
+        }
+    }
+
     void run() {
         std::string line;
         std::smatch match;
@@ -108,6 +133,18 @@ public:
 
             // Skip empty lines
             if (line.empty() || std::regex_match(line, std::regex(R"(^\s*$)"))) {
+                programCounter++;
+                continue;
+            }
+
+            // Close block
+            if (std::regex_match(line, match, closeBlockRegex)) {
+                if (scopeLevel > 0) {
+                    decrementScope();
+                } else {
+                    // Error handling for an unexpected '}' if you need it
+                    std::cerr << "Syntax Error on line " << programCounter << ": Unexpected closing brace '}'." << std::endl;
+                }
                 programCounter++;
                 continue;
             }
@@ -136,8 +173,12 @@ public:
                 std::string expression = match[2].str();
                 
                 // Ensure variable exists (or create it)
-                if (variables.find(varName) == variables.end()) {
-                    variables.emplace(varName, Variable(varName));
+                if (variables.find(varName) != variables.end()) {
+                    // Variable already exists, print an error and skip the rest of the block
+                    std::cerr << "Compilation Error: Cannot redeclare variable '" << varName 
+                            << "'. A variable with that name already exists." << std::endl;
+                } else {
+                    variables.emplace(varName, Variable(varName, scopeLevel));
                 }
                 
                 // Substitute and Evaluate
@@ -280,5 +321,7 @@ void ExecutionEngine::handleIfStatement(const std::string& line) {
             // Jump to the line *immediately following* the closing '}'
             jumpToLine(blockEndLine + 1); 
         }
+    } else {
+        incrementScope();
     }
 }

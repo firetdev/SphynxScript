@@ -13,9 +13,10 @@ public:
     std::string name;
     std::string value;
     std::string type;
+    int scopeLevel = 0;
 
-    Variable(const std::string n)
-        : name(n), value(""), type("undefined") {}
+    Variable(const std::string n, int scope)
+        : name(n), value(""), type("undefined"), scopeLevel(scope) {}
     
     void setValue(const EvalResult& result) {
         value = result.value;
