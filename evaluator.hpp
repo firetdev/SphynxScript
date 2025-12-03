@@ -17,12 +17,26 @@ struct EvalResult {
     EvalResult(std::string v = "", std::string t = "empty") : value(std::move(v)), type(std::move(t)) {}
 
     // Helper conversion functions
-    float asFloat() const { return std::stof(value); }
-    long long asInt() const { return std::stoll(value); }
+    float asFloat() const { 
+        try {
+            return std::stof(value); 
+        } catch (...) {
+            // If conversion fails (e.g., trying to convert a non-numeric string), treat as 0.0 for safety.
+            return 0.0f;
+        }
+    }
+    long long asInt() const { 
+        try {
+            return std::stoll(value); 
+        } catch (...) {
+            // If conversion fails, treat as 0 for safety.
+            return 0LL;
+        }
+    }
     bool asBool() const { return value == "true"; }
     std::string asString() const {
         // Return contents *without* the quotes
-        if (type == "string" && value.length() >= 2) {
+        if (type == "string" && value.length() >= 2 && value.front() == '"' && value.back() == '"') {
             return value.substr(1, value.length() - 2);
         }
         return value;
@@ -105,7 +119,7 @@ private:
         return "operator";
     }
 
-    // --- 1. Tokenizer ---
+    // --- 1. Tokenizer (Unchanged) ---
     std::vector<std::string> tokenize(const std::string& expression) {
         std::vector<std::string> tokens;
         std::string current_token;
@@ -176,7 +190,12 @@ private:
                 while (i < expression.length() && expression[i] != '"') {
                     if (expression[i] == '\\' && i + 1 < expression.length()) {
                         // Handle escaped characters (e.g., \")
-                        current_token += expression[i+1];
+                        char next_c = expression[i+1];
+                        if (next_c == 'n') { current_token += '\n'; } // Add the actual newline character
+                        else if (next_c == 't') { current_token += '\t'; } // Add tab support
+                        else if (next_c == '"') { current_token += '"'; } // Allow escaped quotes inside the string
+                        else if (next_c == '\\') { current_token += '\\'; } // Allow escaped backslashes
+                        else { current_token += expression[i+1]; } // Unknown escape, just add the char
                         i++;
                     } else {
                         current_token += expression[i];
@@ -212,7 +231,7 @@ private:
     }
 
 
-    // --- 2. Shunting-Yard Algorithm ---
+    // --- 2. Shunting-Yard Algorithm (Unchanged) ---
     // 
     std::map<std::string, int> precedence = {
         {"||", 1},
@@ -269,7 +288,7 @@ private:
         return output_queue;
     }
 
-    // --- 3. Postfix (RPN) Evaluator ---
+    // --- 3. Postfix (RPN) Evaluator (Unchanged) ---
     // 
     EvalResult evaluatePostfix(const std::vector<std::string>& postfix) {
         std::stack<EvalResult> stack;
@@ -304,7 +323,7 @@ private:
         return stack.top();
     }
 
-    // --- 4. Operation Helpers ---
+    // --- 4. Operation Helpers (MODIFIED) ---
 
     EvalResult applyUnaryOp(const EvalResult& operand, const std::string& op) {
         if (op == "!") {
@@ -317,7 +336,7 @@ private:
     }
 
     EvalResult applyBinaryOp(const EvalResult& lhs, const EvalResult& rhs, const std::string& op) {
-        // --- Logical Operations ---
+        // --- Logical Operations (Unchanged) ---
         if (op == "&&" || op == "||") {
             if (lhs.type != "bool" || rhs.type != "bool") {
                 throw std::runtime_error("Type Error: Operator '" + op + "' requires boolean operands");
@@ -326,11 +345,12 @@ private:
             return EvalResult(result ? "true" : "false", "bool");
         }
 
-        // --- Comparison Operations ---
+        // --- Comparison Operations (Unchanged) ---
         if (op == "==" || op == "!=") {
             bool result;
             if (lhs.type == "string" && rhs.type == "string") result = (lhs.asString() == rhs.asString());
             else if (lhs.type == "bool" && rhs.type == "bool") result = (lhs.asBool() == rhs.asBool());
+            // Implicitly allow int/float comparison
             else if ((lhs.type == "int" || lhs.type == "float") && (rhs.type == "int" || rhs.type == "float")) {
                 result = (lhs.asFloat() == rhs.asFloat());
             } else {
@@ -364,30 +384,42 @@ private:
 
         // --- Arithmetic Operations ---
         if (op == "+") {
-            // String concatenation (requires both to be strings)
-            if (lhs.type == "string" && rhs.type == "string") {
-                return EvalResult('"' + lhs.asString() + rhs.asString() + '"', "string");
-            }
-
-            // Coerce operands for numeric addition
-            EvalResult L = coerceToNumber(lhs);
-            EvalResult R = coerceToNumber(rhs);
-            
-            // Check if L and R are now numerical types
-            if ((L.type == "int" || L.type == "float") && (R.type == "int" || R.type == "float")) {
-                float result = L.asFloat() + R.asFloat();
-                // ... (rest of numeric addition logic remains unchanged) ...
-            
-            // If one is still a string and the other is numeric, perform string concatenation
-            } else if (L.type == "string" || R.type == "string") {
-                // This is flexible: "5" + 10 -> "510" (Coerce numeric to string)
-                std::string s_l = (L.type == "string") ? L.asString() : L.value;
-                std::string s_r = (R.type == "string") ? R.asString() : R.value;
+            // 1. Flexible String Concatenation: If EITHER operand is a string, concatenate.
+            if (lhs.type == "string" || rhs.type == "string") {
+                // Get the raw value string. If it's a string type, use asString() to remove quotes.
+                // Otherwise, use .value which contains the string representation of the number/bool.
+                std::string s_l = (lhs.type == "string") ? lhs.asString() : lhs.value;
+                std::string s_r = (rhs.type == "string") ? rhs.asString() : rhs.value;
+                
+                // Concatenate and wrap in quotes to preserve it as a string literal result
                 return EvalResult('"' + s_l + s_r + '"', "string");
             }
+
+            // 2. Numerical Addition: If neither is a string, proceed with arithmetic.
             
-            // Fallback error
-            throw std::runtime_error("Type Error: Operator '+' not supported for " + lhs.type + " and " + rhs.type);
+            // Coerce operands for numeric addition (handles string-to-number like "5" + 10)
+            EvalResult L = coerceToNumber(lhs);
+            EvalResult R = coerceToNumber(rhs);
+
+            // Check if L and R are numerical types
+            if (!((L.type == "int" || L.type == "float") && (R.type == "int" || R.type == "float"))) {
+                throw std::runtime_error("Type Error: Operator '+' not supported for " + L.type + " and " + R.type);
+            }
+            
+            // Perform the operation, promoting the result to float if either operand was float.
+            float l = L.asFloat();
+            float r = R.asFloat();
+            float result = l + r;
+            
+            // Determine result type: float if either operand was float, or if result is non-integer
+            std::string result_type = (L.type == "float" || R.type == "float" || std::fmod(result, 1.0) != 0.0) ? "float" : "int";
+            
+            // --- FIX: The previous code was missing this entire return block ---
+            if (result_type == "float") {
+                 return EvalResult(std::to_string(result), "float");
+            }
+            return EvalResult(std::to_string((long long)result), "int");
+            // -----------------------------------------------------------------
         }
 
         // All remaining ops require numbers (-, *, /, %)
@@ -404,7 +436,8 @@ private:
         float l = L.asFloat();
         float r = R.asFloat();
         float result;
-        std::string result_type = (lhs.type == "float" || rhs.type == "float") ? "float" : "int";
+        // Determine initial result type based on operands
+        std::string result_type = (L.type == "float" || R.type == "float") ? "float" : "int";
 
         if (op == "-") result = l - r;
         else if (op == "*") result = l * r;
@@ -417,11 +450,12 @@ private:
             }
         }
         else if (op == "%") {
-            if (lhs.type != "int" || rhs.type != "int") {
+            // Modulo requires integers, so re-check types after generic coercion
+            if (L.type != "int" || R.type != "int") {
                 throw std::runtime_error("Type Error: Operator '%' requires integer operands");
             }
-            if (rhs.asInt() == 0) throw std::runtime_error("Runtime Error: Modulo by zero");
-            result = lhs.asInt() % rhs.asInt();
+            if (R.asInt() == 0) throw std::runtime_error("Runtime Error: Modulo by zero");
+            result = L.asInt() % R.asInt();
             result_type = "int"; // Modulo always results in int
         }
         else {
@@ -429,7 +463,7 @@ private:
         }
         
         // Final result formatting
-        if (result_type == "float" || std::floor(result) != result) {
+        if (result_type == "float" || std::fmod(result, 1.0) != 0.0) {
              return EvalResult(std::to_string(result), "float");
         }
         return EvalResult(std::to_string((long long)result), "int");

@@ -1,56 +1,43 @@
-# Example SphynxScript program to showcase features
+var minute = 0
+var hour = 0
+var times = ""
 
-# Functions have not yet been added, but you can simulate them with GOTOs
-GOTO 8
-println "This is a simulated function"
-GOTO 48
+# Simulated loop
+var i = 0
+# BEGIN LOOP
 
-print "Enter your name: "
-var name = input
-print "Enter your age: "
-var age = input
-var timeUntilAdult = 18 - age
-println "You will be an adult in ${timeUntilAdult} years, ${name}!"
+i = i + 1
 
-# Should skip some lines
-GOTO 25
-
-print "Line not skipped!"
-print "Line not skipped!"
-print "Line not skipped!"
-print "Line not skipped!"
-print "Line not skipped!"
-print "Line not skipped!"
-
-# Abort the program if user has not yet been born (pun intended)
-if age < 0 {
-    END
+minute = minute + 0.01
+hour = hour + 0.01 / 60
+if minute >= 60 {
+    minute = 0
 }
 
-var isAdult = age >= 18
-println isAdult
-
-# Expected outputs:
-# For age < 18, "CHILD", "SEPARATOR1", "SEPARATOR2"
-# For age >= 18, "SEPARATOR1", "ADULT", "SEPARATOR2"
-if age < 18 {
-    println "CHILD"
-}
-println "SEPARATOR1"
-if age >= 18 {
-    println "ADULT"
-}
-println "SEPARATOR2"
-
-# Run our simulated function
-GOTO 5
-
-# Demostrate nested ifs
-if 5 == 5 {
-    if 6 == 7 {
-        println "6 = 7"
+if hour < 12 {
+    var abs = hour - (minute / 5)
+    if abs < 0 {
+        abs = abs + (abs * -2)
     }
-    println "5 = 5"
+    if abs < 0.01 {
+        var intHour = hour
+        var intMinute = minute
+        if minute < 10 {
+            times = times + intHour + ":0" + intMinute
+        }
+        if minute >= 10 {
+            times = times + intHour + ":" + intMinute
+        }
+        times = times + "\n"
+    }
 }
+
+if i < 72000 {
+    GOTO 7
+}
+
+times = times + "12:00"
+
+println times
 
 END
