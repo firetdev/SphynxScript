@@ -7,13 +7,16 @@
 #include <cctype>
 #include <regex>
 #include <map>
+#include <sstream>
 
 #include "evaluator.hpp"
 #include "variable.hpp"
 #include "helpers.hpp"
+#include "function.hpp"
 
 using LineMap = std::map<int, std::streampos>;
 
+// Build a line map
 LineMap buildLineMap(const std::string& filename) {
     LineMap lineMap;
     std::ifstream file(filename);
@@ -30,8 +33,6 @@ LineMap buildLineMap(const std::string& filename) {
         // Record the position of the current line before reading the next one
         lineMap[lineNumber] = (long long)file.tellg() - (long long)line.length() - 1;
 
-        // Special case for line 1: file.tellg() returns the position *after* the first line
-        // You need to ensure lineMap[1] is 0 (the start of the file).
         if (lineNumber == 1) {
             lineMap[1] = 0;
         }
@@ -39,38 +40,64 @@ LineMap buildLineMap(const std::string& filename) {
         lineNumber++;
     }
 
-    // Close the file stream used for mapping
     file.close();
     return lineMap;
 }
 
+// Function to split and trim arguments for the call
+std::vector<std::string> splitAndTrimArgs(const std::string& paramsString) {
+    std::vector<std::string> args;
+    std::stringstream ss(paramsString);
+    std::string segment;
+    while(std::getline(ss, segment, ',')) {
+        // Simple trim logic
+        size_t first = segment.find_first_not_of(' ');
+        if (std::string::npos == first) {
+            continue;
+        }
+        size_t last = segment.find_last_not_of(' ');
+        args.push_back(segment.substr(first, (last - first + 1)));
+    }
+    return args;
+}
+
+
 class ExecutionEngine {
 private:
     std::map<std::string, Variable> variables;
+    std::map<std::string, Function> functions;
     Evaluator eval;
     std::ifstream file;
 
     std::string fileName;
 
-    int scopeLevel = 0;  // Tracks current scope level
-    int programCounter = 1; // Tracks the current line number for context
-    const std::map<int, std::streampos>& fileLineMap; // Reference to the line map
-    
-    // Regular expressions for parsing
+    int scopeLevel = 0;
+    int programCounter = 1;
+    const std::map<int, std::streampos>& fileLineMap;
+
+    int functionDepth = 0;
+    std::vector<int> returnStack;
+
     const std::regex declarationRegex = std::regex(R"(^\s*var\s+([a-zA-Z_]\w*)\s*=\s*(.*))");
     const std::regex assignmentRegex = std::regex(R"(^\s*([a-zA-Z_]\w*)\s*=\s*(.*))");
     const std::regex printRegex = std::regex(R"(^\s*print\s+(.*))");
     const std::regex printlnRegex = std::regex(R"(^\s*println\s+(.*))");
     const std::regex ifRegex = std::regex(R"(^\s*if\s+(.*)\s*\{\s*$)");
+    
+    const std::regex funcDefRegex = std::regex(R"(^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*$)");
+    const std::regex funcCallRegex = std::regex(R"(^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*$)");
+    const std::regex funcEndRegex = std::regex(R"(^\s*end\s*$)");
 
-    // Control flow regexes
-    const std::regex endRegex = std::regex(R"(^\s*END\s*$)"); // Matches: END
+    const std::regex returnRegex = std::regex(R"(^\s*return\s*;?\s*$)");
+    const std::regex returnExpRegex = std::regex(R"(^\s*return\s+.+;?\s*$)");
+    const std::regex endRegex = std::regex(R"(^\s*END\s*$)"); 
     const std::regex gotoRegex = std::regex(R"(^\s*GOTO\s+(\d+)\s*$)");
     const std::regex closeBlockRegex = std::regex(R"(^\s*\}\s*$)");
 
     // Helpers
     void jumpToLine(int targetLine);
     int findBlockEnd(int startLine);
+    int findFunctionEnd(int startLine);
     
     // Handlers
     void handleIfStatement(const std::string& line);
@@ -90,8 +117,14 @@ public:
         }
     }
 
+    void registerFunction(std::string name, std::vector<std::string> parameters, int startingLine) {
+        if (scopeLevel == 0)
+            functions.emplace(name, Function(name, parameters, startingLine));
+        else
+            std::cerr << "Error: Function declarations are only allowed in the global scope." << std::endl;
+    }
+
     void removeVariablesByScope() {
-        // Iterate through the map safely, handling element deletion.
         for (auto it = variables.begin(); it != variables.end(); ) {
             if (it->second.scopeLevel >= scopeLevel) {
                 it = variables.erase(it);
@@ -120,12 +153,12 @@ public:
 
         while (std::getline(file, line)) {
             // Skip comments
-            if (line[0] == '#') {
+            if (!line.empty() && line[0] == '#') {
                 programCounter++;
                 continue;
             }
 
-            // End program
+            // End program (Global END)
             if (std::regex_match(line, match, endRegex)) {
                 std::cout << "\nProgram execution terminated by END command.\n";
                 return;
@@ -137,12 +170,11 @@ public:
                 continue;
             }
 
-            // Close block
+            // Close block (})
             if (std::regex_match(line, match, closeBlockRegex)) {
                 if (scopeLevel > 0) {
                     decrementScope();
                 } else {
-                    // Error handling for an unexpected '}' if you need it
                     std::cerr << "Syntax Error on line " << programCounter << ": Unexpected closing brace '}'." << std::endl;
                 }
                 programCounter++;
@@ -156,16 +188,136 @@ public:
                 continue;
             }
             
-            // STEP 1: Handle I/O Operations (Input Function)
+            // If funcEndRegex is matched, treat it as an implicit return
+            if (std::regex_match(line, match, returnRegex) || std::regex_match(line, match, funcEndRegex)) {
+                if (returnStack.empty()) {
+                    std::cerr << "Runtime Error on line " << programCounter << ": 'return' called outside of a function." << std::endl;
+                    return;
+                }
+                
+                jumpToLine(returnStack.back());
+                returnStack.pop_back();
+                
+                // Only decrement scope if leaving the outermost function call
+                if (functionDepth > 0) {
+                    if (functionDepth == 1) {
+                        decrementScope(); // This call clears function variables
+                    }
+                    functionDepth--;
+                }
+                
+                continue;
+            }
+
+            if (std::regex_match(line, match, returnExpRegex)) {
+                if (returnStack.empty()) {
+                    std::cerr << "Runtime Error on line " << programCounter << ": 'return' called outside of a function." << std::endl;
+                    return;
+                }
+                
+                jumpToLine(returnStack.back());
+                returnStack.pop_back();
+                
+                // Only decrement scope if leaving the outermost function call
+                if (functionDepth > 0) {
+                    if (functionDepth == 1) {
+                        decrementScope(); // This call clears function variables
+                    }
+                    functionDepth--;
+                }
+                
+                continue;
+            }
+
+            // Handle Input
             line = handleInputCall(line, variables);
 
-            // STEP 2: Handle if statements
+            // Handle If
             if (std::regex_match(line, match, ifRegex)) {
                 handleIfStatement(line);
                 programCounter++;
-                continue; // Move to the next line after handling the if
+                continue; 
             }
             
+            // Handle function declaration
+            if (std::regex_match(line, match, funcDefRegex)) {
+                std::string funcName = match[1].str();
+                std::string paramsString = match[2].str();
+                
+                std::vector<std::string> params = splitAndTrimArgs(paramsString);
+
+                registerFunction(funcName, params, programCounter);
+
+                int endLine = findFunctionEnd(programCounter + 1);
+
+                if (endLine != -1) {
+                    jumpToLine(endLine + 1);
+                } else {
+                    std::cerr << "Syntax Error: Function '" << funcName << "' starting at line " 
+                              << programCounter << " is missing an 'end' statement." << std::endl;
+                    return;
+                }
+
+                continue;
+            }
+
+            // Function call logic
+            if (std::regex_match(line, match, funcCallRegex)) {
+                std::string funcName = match[1].str();
+                std::string argsString = match[2].str();
+                
+                if (functions.count(funcName)) {
+                    
+                    const Function& func = functions.at(funcName);
+                    
+                    returnStack.push_back(programCounter + 1); 
+                    
+                    if (functionDepth == 0) {
+                        incrementScope();
+                    }
+                    functionDepth++;
+                    
+                    // Handle Parameters/Arguments
+                    std::vector<std::string> callArgs = splitAndTrimArgs(argsString);
+                    const std::vector<std::string>& funcParams = func.parameters;
+                    
+                    for (size_t i = 0; i < funcParams.size(); ++i) {
+                        std::string paramName = funcParams[i];
+                        EvalResult result;
+                        
+                        if (i < callArgs.size() && !callArgs[i].empty()) {
+                            std::string substitutedArg = findAndReplaceVariables(callArgs[i], variables);
+                            result = eval.evaluate(substitutedArg);
+                        } else {
+                            result.type = "number";
+                            result.value = "0";
+                        }
+                        
+                        if (variables.find(paramName) == variables.end()) {
+                            variables.emplace(paramName, Variable(paramName, scopeLevel));
+                            
+                            if (result.type != "error") {
+                                variables.at(paramName).setValue(result);
+                            } else {
+                                variables.at(paramName).setValue({ "number", "0" });
+                                std::cerr << "Runtime Warning on line " << programCounter << ": Failed to evaluate argument for parameter '" 
+                                          << paramName << "'. Defaulting to 0." << std::endl;
+                            }
+                        } else {
+                            std::cerr << "Runtime Error on line " << programCounter << ": Function parameter '" << paramName 
+                                      << "' conflicts with existing variable in the current scope." << std::endl;
+                        }
+                    }
+
+                    // Goto function body
+                    jumpToLine(func.startingLine + 1); 
+                    continue;
+
+                } else {
+                    std::cerr << "Name Error on line " << programCounter << ": Function '" << funcName << "' is not defined." << std::endl;
+                }
+            }
+
             // STEP 3: Handle Declarations, Assignments, and Prints
             if (std::regex_match(line, match, declarationRegex)) {
                 
@@ -232,9 +384,8 @@ public:
                 } else {
                     std::cerr << "Runtime Error in print statement: " << result.value << std::endl;
                 }
-            } 
-            // NOTE: A new 'else' block will go here for unhandled lines (e.g., standalone expression or control flow)
-            // For now, any unhandled line is simply skipped, which is fine for your current set of commands.
+            }
+
             programCounter++;
         }
     }
@@ -242,9 +393,7 @@ public:
 
 void ExecutionEngine::jumpToLine(int targetLine) {
     if (fileLineMap.count(targetLine)) {
-        // Set the file pointer (seekg) to the start of the target line
         file.seekg(fileLineMap.at(targetLine));
-        // Update the program counter
         programCounter = targetLine;
     } else {
         std::cerr << "Runtime Error on line " << programCounter << ": Invalid jump target " << targetLine << std::endl;
@@ -253,21 +402,18 @@ void ExecutionEngine::jumpToLine(int targetLine) {
 
 int ExecutionEngine::findBlockEnd(int startLine) {
     int currentLine = startLine;
-    int nestedLevel = 1; // We assume we are inside the block already (matched the opening '{')
+    int nestedLevel = 1;
 
-    // Use a temporary file stream for safe parsing without disrupting the main execution stream
     std::ifstream tempFile(fileName); 
     
-    // Jump the temporary file to the start of the block
     if (fileLineMap.count(startLine)) {
         tempFile.seekg(fileLineMap.at(startLine));
     } else {
-        return -1; // Should not happen if startLine is correct
+        return -1; 
     }
 
     std::string line;
     while (nestedLevel > 0 && std::getline(tempFile, line)) {
-        // --- Brace Counting Logic ---
         for (char c : line) {
             if (c == '{') {
                 nestedLevel++;
@@ -275,7 +421,6 @@ int ExecutionEngine::findBlockEnd(int startLine) {
                 nestedLevel--;
                 if (nestedLevel == 0) {
                     tempFile.close();
-                    // currentLine is the line number *containing* the closing '}'
                     return currentLine; 
                 }
             }
@@ -288,7 +433,28 @@ int ExecutionEngine::findBlockEnd(int startLine) {
     return -1; 
 }
 
-// Method inside ExecutionEngine
+int ExecutionEngine::findFunctionEnd(int startLine) {
+    int currentLine = startLine;
+    std::ifstream tempFile(fileName); 
+    
+    if (fileLineMap.count(startLine)) {
+        tempFile.seekg(fileLineMap.at(startLine));
+    } else {
+        return -1; 
+    }
+
+    std::string line;
+    while (std::getline(tempFile, line)) {
+        if (std::regex_match(line, funcEndRegex)) {
+            tempFile.close();
+            return currentLine;
+        }
+        currentLine++;
+    }
+
+    tempFile.close();
+    return -1; 
+}
 
 void ExecutionEngine::handleIfStatement(const std::string& line) {
     std::smatch match;
@@ -300,8 +466,6 @@ void ExecutionEngine::handleIfStatement(const std::string& line) {
     
     std::string conditionExpression = match[1].str();
     
-    // Evaluate the condition
-    // NOTE: We assume findAndReplaceVariables can access the private 'variables' map
     std::string substitutedCond = findAndReplaceVariables(conditionExpression, variables); 
     EvalResult conditionResult = eval.evaluate(substitutedCond);
 
@@ -310,15 +474,11 @@ void ExecutionEngine::handleIfStatement(const std::string& line) {
         return; 
     }
 
-    // If condition is FALSE, jump past the block
     if (conditionResult.asBool() == false) {
-        
-        // Block starts on the line *after* the if statement
         int blockStartLine = programCounter + 1;
         int blockEndLine = findBlockEnd(blockStartLine); 
 
         if (blockEndLine != -1) {
-            // Jump to the line *immediately following* the closing '}'
             jumpToLine(blockEndLine + 1); 
         }
     } else {
