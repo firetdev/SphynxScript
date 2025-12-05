@@ -1,25 +1,21 @@
-func sayEqual()
+func sayEqual() {
     println "equal"
-end
+}
 
-func sayNot()
+func sayNot() {
     print "Not "
     sayEqual()
-    
-end
+}
 
-func equal(x, y)
+func equal(x, y) {
     if x == y {
         println "Equal"
         return
     }
     sayNot()
-
-end
+}
 
 var a = input
 var b = input
 
 equal(a, b)
-
-END

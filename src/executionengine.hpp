@@ -16,7 +16,6 @@
 
 using LineMap = std::map<int, std::streampos>;
 
-// Build a line map
 LineMap buildLineMap(const std::string& filename) {
     LineMap lineMap;
     std::ifstream file(filename);
@@ -33,6 +32,8 @@ LineMap buildLineMap(const std::string& filename) {
         // Record the position of the current line before reading the next one
         lineMap[lineNumber] = (long long)file.tellg() - (long long)line.length() - 1;
 
+        // Special case for line 1: file.tellg() returns the position *after* the first line
+        // You need to ensure lineMap[1] is 0 (the start of the file).
         if (lineNumber == 1) {
             lineMap[1] = 0;
         }
@@ -40,11 +41,12 @@ LineMap buildLineMap(const std::string& filename) {
         lineNumber++;
     }
 
+    // Close the file stream used for mapping
     file.close();
     return lineMap;
 }
 
-// Function to split and trim arguments for the call
+// Function to split and trim arguments for function calls
 std::vector<std::string> splitAndTrimArgs(const std::string& paramsString) {
     std::vector<std::string> args;
     std::stringstream ss(paramsString);
@@ -61,7 +63,6 @@ std::vector<std::string> splitAndTrimArgs(const std::string& paramsString) {
     return args;
 }
 
-
 class ExecutionEngine {
 private:
     std::map<std::string, Variable> variables;
@@ -71,33 +72,36 @@ private:
 
     std::string fileName;
 
-    int scopeLevel = 0;
-    int programCounter = 1;
-    const std::map<int, std::streampos>& fileLineMap;
+    int scopeLevel = 0;  // Tracks current scope level
+    int programCounter = 1; // Tracks the current line number for context
+    const std::map<int, std::streampos>& fileLineMap; // Reference to the line map
 
     int functionDepth = 0;
     std::vector<int> returnStack;
 
+    bool ignoreLine = false;
+    
+    // Regular expressions for parsing
     const std::regex declarationRegex = std::regex(R"(^\s*var\s+([a-zA-Z_]\w*)\s*=\s*(.*))");
     const std::regex assignmentRegex = std::regex(R"(^\s*([a-zA-Z_]\w*)\s*=\s*(.*))");
     const std::regex printRegex = std::regex(R"(^\s*print\s+(.*))");
     const std::regex printlnRegex = std::regex(R"(^\s*println\s+(.*))");
     const std::regex ifRegex = std::regex(R"(^\s*if\s+(.*)\s*\{\s*$)");
-    
-    const std::regex funcDefRegex = std::regex(R"(^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*$)");
-    const std::regex funcCallRegex = std::regex(R"(^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*$)");
-    const std::regex funcEndRegex = std::regex(R"(^\s*end\s*$)");
 
+    // Function regexes
+    const std::regex funcDefRegex = std::regex(R"(^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*\{\s*$)");
+    const std::regex funcCallRegex = std::regex(R"(^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*$)");
     const std::regex returnRegex = std::regex(R"(^\s*return\s*;?\s*$)");
     const std::regex returnExpRegex = std::regex(R"(^\s*return\s+.+;?\s*$)");
-    const std::regex endRegex = std::regex(R"(^\s*END\s*$)"); 
+
+    // Control flow regexes
+    const std::regex endRegex = std::regex(R"(^\s*END\s*$)"); // Matches: END
     const std::regex gotoRegex = std::regex(R"(^\s*GOTO\s+(\d+)\s*$)");
     const std::regex closeBlockRegex = std::regex(R"(^\s*\}\s*$)");
 
     // Helpers
     void jumpToLine(int targetLine);
     int findBlockEnd(int startLine);
-    int findFunctionEnd(int startLine);
     
     // Handlers
     void handleIfStatement(const std::string& line);
@@ -125,6 +129,7 @@ public:
     }
 
     void removeVariablesByScope() {
+        // Iterate through the map safely, handling element deletion.
         for (auto it = variables.begin(); it != variables.end(); ) {
             if (it->second.scopeLevel >= scopeLevel) {
                 it = variables.erase(it);
@@ -153,12 +158,19 @@ public:
 
         while (std::getline(file, line)) {
             // Skip comments
-            if (!line.empty() && line[0] == '#') {
+            if (line[0] == '#') {
                 programCounter++;
                 continue;
             }
 
-            // End program (Global END)
+            // Ignore line
+            if (ignoreLine) {
+                ignoreLine = false;
+                programCounter++;
+                continue;
+            }
+
+            // End program
             if (std::regex_match(line, match, endRegex)) {
                 std::cout << "\nProgram execution terminated by END command.\n";
                 return;
@@ -170,26 +182,35 @@ public:
                 continue;
             }
 
-            // Close block (})
+            // Close block
             if (std::regex_match(line, match, closeBlockRegex)) {
-                if (scopeLevel > 0) {
+                if (scopeLevel == 1 && functionDepth > 0) {
+                    // Function scope ending without explicit return
+                    // We now:
+                    // - Jump back to the return line
+                    // - Remove the last return line from the stack
+                    // - Decrement function depth
+                    // - If function depth is 0, meaning we are now back to global scope, decrement scope level
+                    if (!returnStack.empty()) {
+                        int returnLine = returnStack.back();
+                        returnStack.pop_back();
+                        jumpToLine(returnLine);
+                    }
+                    functionDepth--;
+                    if (functionDepth == 0)
+                        decrementScope();
+                } else if (scopeLevel > 0) {
                     decrementScope();
                 } else {
+                    // Error handling for an unexpected '}' if you need it
                     std::cerr << "Syntax Error on line " << programCounter << ": Unexpected closing brace '}'." << std::endl;
                 }
                 programCounter++;
                 continue;
             }
 
-            // GOTO
-            if (std::regex_match(line, match, gotoRegex)) {
-                int targetLine = std::stoi(match[1].str());
-                jumpToLine(targetLine);
-                continue;
-            }
-            
-            // If funcEndRegex is matched, treat it as an implicit return
-            if (std::regex_match(line, match, returnRegex) || std::regex_match(line, match, funcEndRegex)) {
+            // Function returns
+            if (std::regex_match(line, match, returnRegex)) {
                 if (returnStack.empty()) {
                     std::cerr << "Runtime Error on line " << programCounter << ": 'return' called outside of a function." << std::endl;
                     return;
@@ -201,7 +222,7 @@ public:
                 // Only decrement scope if leaving the outermost function call
                 if (functionDepth > 0) {
                     if (functionDepth == 1) {
-                        decrementScope(); // This call clears function variables
+                        decrementScope();  // This call clears function variables
                     }
                     functionDepth--;
                 }
@@ -210,35 +231,10 @@ public:
             }
 
             if (std::regex_match(line, match, returnExpRegex)) {
-                if (returnStack.empty()) {
-                    std::cerr << "Runtime Error on line " << programCounter << ": 'return' called outside of a function." << std::endl;
-                    return;
-                }
-                
-                jumpToLine(returnStack.back());
-                returnStack.pop_back();
-                
-                // Only decrement scope if leaving the outermost function call
-                if (functionDepth > 0) {
-                    if (functionDepth == 1) {
-                        decrementScope(); // This call clears function variables
-                    }
-                    functionDepth--;
-                }
-                
-                continue;
+                // Return with expression--not yet implemented
             }
 
-            // Handle Input
-            line = handleInputCall(line, variables);
-
-            // Handle If
-            if (std::regex_match(line, match, ifRegex)) {
-                handleIfStatement(line);
-                programCounter++;
-                continue; 
-            }
-            
+            // FUNCTION LOGIC
             // Handle function declaration
             if (std::regex_match(line, match, funcDefRegex)) {
                 std::string funcName = match[1].str();
@@ -248,14 +244,9 @@ public:
 
                 registerFunction(funcName, params, programCounter);
 
-                int endLine = findFunctionEnd(programCounter + 1);
-
+                int endLine = findBlockEnd(programCounter + 1);
                 if (endLine != -1) {
                     jumpToLine(endLine + 1);
-                } else {
-                    std::cerr << "Syntax Error: Function '" << funcName << "' starting at line " 
-                              << programCounter << " is missing an 'end' statement." << std::endl;
-                    return;
                 }
 
                 continue;
@@ -263,6 +254,11 @@ public:
 
             // Function call logic
             if (std::regex_match(line, match, funcCallRegex)) {
+                while (scopeLevel > 0) {
+                    decrementScope(); // Wipe scope variables
+                }
+                incrementScope(); // Function scope
+
                 std::string funcName = match[1].str();
                 std::string argsString = match[2].str();
                 
@@ -318,6 +314,23 @@ public:
                 }
             }
 
+            // GOTO
+            if (std::regex_match(line, match, gotoRegex)) {
+                int targetLine = std::stoi(match[1].str());
+                jumpToLine(targetLine);
+                continue;
+            }
+            
+            // STEP 1: Handle I/O Operations (Input Function)
+            line = handleInputCall(line, variables);
+
+            // STEP 2: Handle if statements
+            if (std::regex_match(line, match, ifRegex)) {
+                handleIfStatement(line);
+                programCounter++;
+                continue; // Move to the next line after handling the if
+            }
+            
             // STEP 3: Handle Declarations, Assignments, and Prints
             if (std::regex_match(line, match, declarationRegex)) {
                 
@@ -384,8 +397,9 @@ public:
                 } else {
                     std::cerr << "Runtime Error in print statement: " << result.value << std::endl;
                 }
-            }
-
+            } 
+            // NOTE: A new 'else' block will go here for unhandled lines (e.g., standalone expression or control flow)
+            // For now, any unhandled line is simply skipped, which is fine for your current set of commands.
             programCounter++;
         }
     }
@@ -393,27 +407,32 @@ public:
 
 void ExecutionEngine::jumpToLine(int targetLine) {
     if (fileLineMap.count(targetLine)) {
+        // Set the file pointer (seekg) to the start of the target line
         file.seekg(fileLineMap.at(targetLine));
+        // Update the program counter
         programCounter = targetLine;
     } else {
-        std::cerr << "Runtime Error on line " << programCounter << ": Invalid jump target " << targetLine << std::endl;
+        std::exit(EXIT_FAILURE);
     }
 }
 
 int ExecutionEngine::findBlockEnd(int startLine) {
     int currentLine = startLine;
-    int nestedLevel = 1;
+    int nestedLevel = 1; // We assume we are inside the block already (matched the opening '{')
 
+    // Use a temporary file stream for safe parsing without disrupting the main execution stream
     std::ifstream tempFile(fileName); 
     
+    // Jump the temporary file to the start of the block
     if (fileLineMap.count(startLine)) {
         tempFile.seekg(fileLineMap.at(startLine));
     } else {
-        return -1; 
+        return -1; // Should not happen if startLine is correct
     }
 
     std::string line;
     while (nestedLevel > 0 && std::getline(tempFile, line)) {
+        // --- Brace Counting Logic ---
         for (char c : line) {
             if (c == '{') {
                 nestedLevel++;
@@ -421,6 +440,7 @@ int ExecutionEngine::findBlockEnd(int startLine) {
                 nestedLevel--;
                 if (nestedLevel == 0) {
                     tempFile.close();
+                    // currentLine is the line number *containing* the closing '}'
                     return currentLine; 
                 }
             }
@@ -433,28 +453,7 @@ int ExecutionEngine::findBlockEnd(int startLine) {
     return -1; 
 }
 
-int ExecutionEngine::findFunctionEnd(int startLine) {
-    int currentLine = startLine;
-    std::ifstream tempFile(fileName); 
-    
-    if (fileLineMap.count(startLine)) {
-        tempFile.seekg(fileLineMap.at(startLine));
-    } else {
-        return -1; 
-    }
-
-    std::string line;
-    while (std::getline(tempFile, line)) {
-        if (std::regex_match(line, funcEndRegex)) {
-            tempFile.close();
-            return currentLine;
-        }
-        currentLine++;
-    }
-
-    tempFile.close();
-    return -1; 
-}
+// Method inside ExecutionEngine
 
 void ExecutionEngine::handleIfStatement(const std::string& line) {
     std::smatch match;
@@ -466,6 +465,8 @@ void ExecutionEngine::handleIfStatement(const std::string& line) {
     
     std::string conditionExpression = match[1].str();
     
+    // Evaluate the condition
+    // NOTE: We assume findAndReplaceVariables can access the private 'variables' map
     std::string substitutedCond = findAndReplaceVariables(conditionExpression, variables); 
     EvalResult conditionResult = eval.evaluate(substitutedCond);
 
@@ -474,11 +475,15 @@ void ExecutionEngine::handleIfStatement(const std::string& line) {
         return; 
     }
 
+    // If condition is FALSE, jump past the block
     if (conditionResult.asBool() == false) {
+        
+        // Block starts on the line *after* the if statement
         int blockStartLine = programCounter + 1;
         int blockEndLine = findBlockEnd(blockStartLine); 
 
         if (blockEndLine != -1) {
+            // Jump to the line *immediately following* the closing '}'
             jumpToLine(blockEndLine + 1); 
         }
     } else {
