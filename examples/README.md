@@ -7,9 +7,13 @@ Rename the example to "script.snx", which is the file the interpreter looks for.
 ## Syntax: end vs bracket
 Designing SphynxScript gave me the freedom to make a programming that can be whatever I want it to be. 
 I've decided to turn that freedom into the language's main philosophy. 
-Therefore, there are two options for syntax: "end" and "brackets" (they can be changed in the ExecutionEngine,
-there's not yet any way to set them in your script). The default is "end". The two folders here are the same examples,
+Therefore, there are two options for syntax: "end" and "brackets". The default is "end". The two folders here are the same examples,
 but different syntaxes.
+
+If you'd like to use a style other than "end" (currently only "brackets"), you have to define the style at the top of the file, as is
+done in the examples. This only requires one line:
+
+`STYLE = "brackets"`
 
 ## List of examples
 clock_simulation.snx:  a SphynxScript implementation of my Clock Simulation repo
