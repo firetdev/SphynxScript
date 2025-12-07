@@ -1,5 +1,26 @@
-// TODO: Add while loops, dictionaries, piping. Fix bugs in function.hpp.
+// TODO: Add while loops, dictionaries, arrays, piping, filters. Fix bugs in function.hpp.
 // Add "filters" and "piping (->)"
+// Filter example (end style):
+// filter MyFilter
+//     201+ => 200
+//     99- => 100
+//     + => -
+//     x.0-x.99 => x
+// end
+//
+// Piping example:
+// var result = ParseJSON(file) -> MyFilter -> findKeys("age") -> adult() -> print()
+//
+// Dictionary example (always uses brackets):
+// dict x = {
+//    name: "John",
+//    age: 30,
+//    isStudent: false
+// }
+//
+// Array example:
+// arr numbers = [1, 2, 3, 4, 5]
+
 
 #include <iostream>
 #include <string>
