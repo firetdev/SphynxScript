@@ -99,6 +99,7 @@ private:
     // Control flow regexes
     const std::regex endRegex = std::regex(R"(^\s*END\s*$)"); // Matches: END
     const std::regex gotoRegex = std::regex(R"(^\s*GOTO\s+(\d+)\s*$)");
+    const std::regex styleRegex = std::regex(R"(^\s*STYLE\s*=\s*([a-z]+)\s*$)");
     std::regex closeBlockRegex;
 
     // Helpers
@@ -174,6 +175,18 @@ public:
         std::smatch match;
 
         while (std::getline(file, line)) {
+            // Set STYLE
+            if (std::regex_match(line, match, styleRegex)) {
+                std::string styleInput = match[1];
+                if (styleInput == "brackets") {
+                    style = "brackets";
+                    setupStyleRegexes();
+                }
+                if (styleInput == "end") {
+                    style = "end";
+                    setupStyleRegexes();
+                }
+            }
             // Skip comments
             if (line[0] == '#') {
                 programCounter++;
