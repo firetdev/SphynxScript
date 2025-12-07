@@ -72,6 +72,8 @@ private:
 
     std::string fileName;
 
+    std::string style = "end";  // "end" or "brackets"
+
     int scopeLevel = 0;  // Tracks current scope level
     int programCounter = 1; // Tracks the current line number for context
     const std::map<int, std::streampos>& fileLineMap; // Reference to the line map
@@ -86,10 +88,10 @@ private:
     const std::regex assignmentRegex = std::regex(R"(^\s*([a-zA-Z_]\w*)\s*=\s*(.*))");
     const std::regex printRegex = std::regex(R"(^\s*print\s+(.*))");
     const std::regex printlnRegex = std::regex(R"(^\s*println\s+(.*))");
-    const std::regex ifRegex = std::regex(R"(^\s*if\s+(.*)\s*\{\s*$)");
+    std::regex ifRegex;
 
     // Function regexes
-    const std::regex funcDefRegex = std::regex(R"(^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*\{\s*$)");
+    std::regex funcDefRegex;
     const std::regex funcCallRegex = std::regex(R"(^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*$)");
     const std::regex returnRegex = std::regex(R"(^\s*return\s*;?\s*$)");
     const std::regex returnExpRegex = std::regex(R"(^\s*return\s+.+;?\s*$)");
@@ -97,7 +99,7 @@ private:
     // Control flow regexes
     const std::regex endRegex = std::regex(R"(^\s*END\s*$)"); // Matches: END
     const std::regex gotoRegex = std::regex(R"(^\s*GOTO\s+(\d+)\s*$)");
-    const std::regex closeBlockRegex = std::regex(R"(^\s*\}\s*$)");
+    std::regex closeBlockRegex;
 
     // Helpers
     void jumpToLine(int targetLine);
@@ -106,6 +108,19 @@ private:
     // Handlers
     void handleIfStatement(const std::string& line);
 
+    // Style setup
+    void setupStyleRegexes() {
+        if (style == "brackets") {
+            ifRegex = std::regex(R"(^\s*if\s+(.*)\s*\{\s*$)");
+            funcDefRegex = std::regex(R"(^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*\{\s*$)");
+            closeBlockRegex = std::regex(R"(^\s*\}\s*$)");
+        } else if (style == "end") {
+            ifRegex = std::regex(R"(^\s*if\s+(.*)\s*$)");
+            funcDefRegex = std::regex(R"(^\s*func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)\s*$)");
+            closeBlockRegex = std::regex(R"(^\s*end\s*$)");
+        }
+    }
+
 public:
     ExecutionEngine(const std::string& filename, const std::map<int, std::streampos>& lineMap) : fileLineMap(lineMap) {
         file.open(filename);
@@ -113,6 +128,8 @@ public:
         if (!file.is_open()) {
             throw std::runtime_error("Failed to open script file: " + filename);
         }
+
+        setupStyleRegexes();
     }
 
     ~ExecutionEngine() {
@@ -203,7 +220,7 @@ public:
                     decrementScope();
                 } else {
                     // Error handling for an unexpected '}' if you need it
-                    std::cerr << "Syntax Error on line " << programCounter << ": Unexpected closing brace '}'." << std::endl;
+                    std::cerr << "Syntax Error on line " << programCounter << ": Unexpected closing brace '}' or end statement 'end'." << std::endl;
                 }
                 programCounter++;
                 continue;
@@ -263,9 +280,7 @@ public:
                 std::string argsString = match[2].str();
                 
                 if (functions.count(funcName)) {
-                    
                     const Function& func = functions.at(funcName);
-                    
                     returnStack.push_back(programCounter + 1); 
                     
                     if (functionDepth == 0) {
@@ -433,18 +448,40 @@ int ExecutionEngine::findBlockEnd(int startLine) {
     std::string line;
     while (nestedLevel > 0 && std::getline(tempFile, line)) {
         // --- Brace Counting Logic ---
-        for (char c : line) {
-            if (c == '{') {
+        if (style == "brackets") {
+            for (char c : line) {
+                if (c == '{') {
+                    nestedLevel++;
+                } else if (c == '}') {
+                    nestedLevel--;
+                    if (nestedLevel == 0) {
+                        tempFile.close();
+                        // currentLine is the line number *containing* the closing '}'
+                        return currentLine; 
+                    }
+                }
+            }
+        } else if (style == "end") {
+            // Detect block openers
+            // Extend this when necessary for other block types
+            if (std::regex_match(line, funcDefRegex) ||
+                std::regex_match(line, ifRegex))
+            {
                 nestedLevel++;
-            } else if (c == '}') {
+            }
+
+
+            // Detect block close
+            else if (std::regex_match(line, closeBlockRegex)) {
                 nestedLevel--;
+
                 if (nestedLevel == 0) {
                     tempFile.close();
-                    // currentLine is the line number *containing* the closing '}'
-                    return currentLine; 
+                    return currentLine;   // the line number containing "end"
                 }
             }
         }
+
         currentLine++;
     }
 
@@ -476,8 +513,7 @@ void ExecutionEngine::handleIfStatement(const std::string& line) {
     }
 
     // If condition is FALSE, jump past the block
-    if (conditionResult.asBool() == false) {
-        
+    if (conditionResult.asBool() == false) {     
         // Block starts on the line *after* the if statement
         int blockStartLine = programCounter + 1;
         int blockEndLine = findBlockEnd(blockStartLine); 

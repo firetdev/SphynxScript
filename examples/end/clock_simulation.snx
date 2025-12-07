@@ -1,0 +1,43 @@
+var minute = 0
+var hour = 0
+var times = ""
+
+# Simulated loop
+var i = 0
+# BEGIN LOOP
+
+i = i + 1
+
+minute = minute + 0.01
+hour = hour + 0.01 / 60
+if minute >= 60
+    minute = 0
+end
+
+if hour < 12
+    var abs = hour - (minute / 5)
+    if abs < 0
+        abs = abs + (abs * -2)
+    end
+    if abs < 0.01
+        var intHour = hour
+        var intMinute = minute
+        if minute < 10
+            times = times + intHour + ":0" + intMinute
+        end
+        if minute >= 10
+            times = times + intHour + ":" + intMinute
+        end
+        times = times + "\n"
+    end
+end
+
+if i < 72000
+    GOTO 7
+end
+
+times = times + "12:00"
+
+println times
+
+END

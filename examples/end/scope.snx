@@ -1,0 +1,15 @@
+# This script showcases the scope system in the interpreter
+
+var global = 10
+if global == 10
+    var local = 50
+    println "Local: ${local}"
+    if local == 50
+        var moreLocal = 60
+        println "moreLocal: ${moreLocal}"
+    end
+    println "moreLocal: ${moreLocal}"
+end
+println "Local: ${local}"
+println "moreLocal: ${moreLocal}"
+END

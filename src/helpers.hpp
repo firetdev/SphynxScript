@@ -25,7 +25,7 @@ bool isVariableName(const std::string& token) {
     // Check if the name is a reserved keyword (like true, false, var)
     if (token == "true" || token == "false" || token == "var" || token == "print" || token == "println" || token == "input"
         || token == "func" || token == "return" || token == "if" || token == "else" || token == "while" || token == "import"
-        || token == "END" || token == "GOTO") {
+        || token == "END" || token == "GOTO" || token == "end") {
         return false;
     }
     for (char c : token) {

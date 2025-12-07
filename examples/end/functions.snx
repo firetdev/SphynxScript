@@ -1,19 +1,21 @@
-func sayEqual() {
-    println "equal"
-}
+# Currently bugged, looking for fix
 
-func sayNot() {
+func sayEqual()
+    println "equal"
+end
+
+func sayNot()
     print "Not "
     sayEqual()
-}
+end
 
-func equal(x, y) {
-    if x == y {
+func equal(x, y)
+    if x == y
         println "Equal"
         return
-    }
+    end
     sayNot()
-}
+end
 
 var a = input
 var b = input

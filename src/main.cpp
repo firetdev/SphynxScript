@@ -1,4 +1,5 @@
-// TODO: Add while loops and functions
+// TODO: Add while loops, dictionaries, piping. Fix bugs in function.hpp.
+// Add "filters" and "piping (->)"
 
 #include <iostream>
 #include <string>

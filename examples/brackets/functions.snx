@@ -1,0 +1,23 @@
+# Currently bugged, looking for fix
+
+func sayEqual() {
+    println "equal"
+}
+
+func sayNot() {
+    print "Not "
+    sayEqual()
+}
+
+func equal(x, y) {
+    if x == y {
+        println "Equal"
+        return
+    }
+    sayNot()
+}
+
+var a = input
+var b = input
+
+equal(a, b)
