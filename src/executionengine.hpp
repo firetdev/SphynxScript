@@ -107,7 +107,7 @@ private:
     int findBlockEnd(int startLine);
     
     // Handlers
-    void handleIfStatement(const std::string& line);
+    bool handleIfStatement(const std::string& line);
 
     // Style setup
     void setupStyleRegexes() {
@@ -186,6 +186,9 @@ public:
                     style = "end";
                     setupStyleRegexes();
                 }
+
+                programCounter++;
+                continue;
             }
             // Skip comments
             if (line[0] == '#') {
@@ -215,20 +218,23 @@ public:
             // Close block
             if (std::regex_match(line, match, closeBlockRegex)) {
                 if (scopeLevel == 1 && functionDepth > 0) {
-                    // Function scope ending without explicit return
-                    // We now:
-                    // - Jump back to the return line
-                    // - Remove the last return line from the stack
-                    // - Decrement function depth
-                    // - If function depth is 0, meaning we are now back to global scope, decrement scope level
-                    if (!returnStack.empty()) {
-                        int returnLine = returnStack.back();
-                        returnStack.pop_back();
-                        jumpToLine(returnLine);
+                    if (returnStack.empty()) {
+                        std::cerr << "Runtime Error on line " << programCounter << std::endl;
+                        return;
                     }
-                    functionDepth--;
-                    if (functionDepth == 0)
-                        decrementScope();
+                    
+                    jumpToLine(returnStack.back());
+                    returnStack.pop_back();
+                    
+                    // Only decrement scope if leaving the outermost function call
+                    if (functionDepth > 0) {
+                        if (functionDepth == 1) {
+                            decrementScope();  // This call clears function variables
+                        }
+                        functionDepth--;
+                    }
+                    
+                    continue;
                 } else if (scopeLevel > 0) {
                     decrementScope();
                 } else {
@@ -284,22 +290,18 @@ public:
 
             // Function call logic
             if (std::regex_match(line, match, funcCallRegex)) {
-                while (scopeLevel > 0) {
-                    decrementScope(); // Wipe scope variables
-                }
-                incrementScope(); // Function scope
-
                 std::string funcName = match[1].str();
                 std::string argsString = match[2].str();
                 
                 if (functions.count(funcName)) {
-                    const Function& func = functions.at(funcName);
-                    returnStack.push_back(programCounter + 1); 
-                    
-                    if (functionDepth == 0) {
-                        incrementScope();
+                    while (scopeLevel > 0) {
+                        decrementScope();  // Wipe scope variables
                     }
+                    incrementScope();
                     functionDepth++;
+
+                    const Function& func = functions.at(funcName);
+                    returnStack.push_back(programCounter + 1);
                     
                     // Handle Parameters/Arguments
                     std::vector<std::string> callArgs = splitAndTrimArgs(argsString);
@@ -354,9 +356,13 @@ public:
 
             // STEP 2: Handle if statements
             if (std::regex_match(line, match, ifRegex)) {
-                handleIfStatement(line);
-                programCounter++;
-                continue; // Move to the next line after handling the if
+                // Store whether we jumped
+                bool jumped = handleIfStatement(line);
+
+                if (!jumped) {
+                    programCounter++;
+                }
+                continue;
             }
             
             // STEP 3: Handle Declarations, Assignments, and Prints
@@ -505,37 +511,35 @@ int ExecutionEngine::findBlockEnd(int startLine) {
 
 // Method inside ExecutionEngine
 
-void ExecutionEngine::handleIfStatement(const std::string& line) {
+bool ExecutionEngine::handleIfStatement(const std::string& line) {
     std::smatch match;
 
     if (!std::regex_match(line, match, ifRegex)) {
         std::cerr << "Internal Error: Called handleIfStatement with invalid line format." << std::endl;
-        return;
+        return false; // Did not jump
     }
     
     std::string conditionExpression = match[1].str();
-    
-    // Evaluate the condition
-    // NOTE: We assume findAndReplaceVariables can access the private 'variables' map
     std::string substitutedCond = findAndReplaceVariables(conditionExpression, variables); 
     EvalResult conditionResult = eval.evaluate(substitutedCond);
 
     if (conditionResult.type == "error") {
         std::cerr << "Runtime Error on line " << programCounter << ": " << conditionResult.value << std::endl;
-        return; 
+        return false; 
     }
 
     // If condition is FALSE, jump past the block
     if (conditionResult.asBool() == false) {     
-        // Block starts on the line *after* the if statement
         int blockStartLine = programCounter + 1;
         int blockEndLine = findBlockEnd(blockStartLine); 
 
         if (blockEndLine != -1) {
-            // Jump to the line *immediately following* the closing '}'
             jumpToLine(blockEndLine + 1); 
+            return true; // <--- WE JUMPED
         }
     } else {
         incrementScope();
     }
+    
+    return false; // <--- WE DID NOT JUMP
 }

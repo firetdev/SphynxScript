@@ -39,5 +39,3 @@ end
 times = times + "12:00"
 
 println times
-
-END

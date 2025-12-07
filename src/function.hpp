@@ -12,8 +12,7 @@
 #include "variable.hpp"
 #include "helpers.hpp"
 
-// TODO: Allow expressions in return statements, fix issue in demo code where the return line for the equal() function
-// is 17 when it should be 16
+// TODO: Allow expressions in return statements
 
 struct Function {
     std::string name;

@@ -1,3 +1,5 @@
+STYLE = "brackets"
+
 var minute = 0
 var hour = 0
 var times = ""
@@ -39,5 +41,3 @@ if i < 72000 {
 times = times + "12:00"
 
 println times
-
-END

@@ -1,4 +1,4 @@
-// TODO: Add while loops, dictionaries, arrays, piping, filters. Fix bugs in function.hpp.
+// TODO: Add while loops, dictionaries, arrays, piping, filters. Add return values in function.hpp.
 // Add "filters" and "piping (->)"
 // Filter example (end style):
 // filter MyFilter

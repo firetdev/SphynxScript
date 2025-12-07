@@ -1,0 +1,16 @@
+STYLE = "brackets"
+
+func checkAge() {
+    if age >= 18 {
+        println "${name} is an adult!"
+        return
+    }
+    println "${name} is a child!"
+}
+
+print "Enter your name: "
+var name = input
+print "Enter your age: "
+var age = input
+
+checkAge()

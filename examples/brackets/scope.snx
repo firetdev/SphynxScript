@@ -1,3 +1,5 @@
+STYLE = "brackets"
+
 # This script showcases the scope system in the interpreter
 
 var global = 10
@@ -12,4 +14,3 @@ if global == 10 {
 }
 println "Local: ${local}"
 println "moreLocal: ${moreLocal}"
-END

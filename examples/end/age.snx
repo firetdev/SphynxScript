@@ -1,0 +1,14 @@
+func checkAge()
+    if age >= 18
+        println "${name} is an adult!"
+        return
+    end
+    println "${name} is a child!"
+end
+
+print "Enter your name: "
+var name = input
+print "Enter your age: "
+var age = input
+
+checkAge()

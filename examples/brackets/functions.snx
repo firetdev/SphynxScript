@@ -1,4 +1,4 @@
-# Currently bugged, looking for fix
+STYLE = "brackets"
 
 func sayEqual() {
     println "equal"

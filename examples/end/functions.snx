@@ -1,5 +1,3 @@
-# Currently bugged, looking for fix
-
 func sayEqual()
     println "equal"
 end

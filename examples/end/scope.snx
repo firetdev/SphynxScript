@@ -12,4 +12,3 @@ if global == 10
 end
 println "Local: ${local}"
 println "moreLocal: ${moreLocal}"
-END
