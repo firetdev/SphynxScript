@@ -293,6 +293,13 @@ public:
                 std::string funcName = match[1].str();
                 std::string argsString = match[2].str();
                 
+                if (funcName == "input" || funcName == "print" || funcName == "println" || funcName == "var"
+                    || funcName == "if" || funcName == "GOTO" || funcName == "return" || funcName == "END"
+                    || funcName == "STYLE" || funcName == "func" || funcName == "end" || funcName == "while") {
+                    // Handled elsewhere
+                    programCounter++;
+                    continue;
+                }
                 if (functions.count(funcName)) {
                     while (scopeLevel > 0) {
                         decrementScope();  // Wipe scope variables
