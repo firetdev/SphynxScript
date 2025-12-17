@@ -5,4 +5,4 @@ SphynxScript is currently run standalone, but I intend to add support for embedd
 
 SphynxScript should be seen as a mix of JavaScript, Ruby, and GDScript.
 
-More information coming soon.
+More information coming soon
