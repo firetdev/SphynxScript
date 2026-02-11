@@ -345,7 +345,7 @@ private:
             return EvalResult(result ? "true" : "false", "bool");
         }
 
-        // --- Comparison Operations (Unchanged) ---
+        // Comparison Operations
         if (op == "==" || op == "!=") {
             bool result;
             if (lhs.type == "string" && rhs.type == "string") result = (lhs.asString() == rhs.asString());
@@ -384,27 +384,25 @@ private:
 
         // --- Arithmetic Operations ---
         if (op == "+") {
-            // 1. Flexible String Concatenation: If EITHER operand is a string, concatenate.
-            if (lhs.type == "string" || rhs.type == "string") {
-                // Get the raw value string. If it's a string type, use asString() to remove quotes.
-                // Otherwise, use .value which contains the string representation of the number/bool.
-                std::string s_l = (lhs.type == "string") ? lhs.asString() : lhs.value;
-                std::string s_r = (rhs.type == "string") ? rhs.asString() : rhs.value;
-                
-                // Concatenate and wrap in quotes to preserve it as a string literal result
-                return EvalResult('"' + s_l + s_r + '"', "string");
-            }
-
-            // 2. Numerical Addition: If neither is a string, proceed with arithmetic.
-            
             // Coerce operands for numeric addition (handles string-to-number like "5" + 10)
             EvalResult L = coerceToNumber(lhs);
             EvalResult R = coerceToNumber(rhs);
 
             // Check if L and R are numerical types
             if (!((L.type == "int" || L.type == "float") && (R.type == "int" || R.type == "float"))) {
-                throw std::runtime_error("Type Error: Operator '+' not supported for " + L.type + " and " + R.type);
+                // 1. Flexible String Concatenation: If EITHER operand is a string, concatenate.
+                if (lhs.type == "string" || rhs.type == "string") {
+                    // Get the raw value string. If it's a string type, use asString() to remove quotes.
+                    // Otherwise, use .value which contains the string representation of the number/bool.
+                    std::string s_l = (lhs.type == "string") ? lhs.asString() : lhs.value;
+                    std::string s_r = (rhs.type == "string") ? rhs.asString() : rhs.value;
+                    
+                    // Concatenate and wrap in quotes to preserve it as a string literal result
+                    return EvalResult('"' + s_l + s_r + '"', "string");
+                }
             }
+
+            // 2. Numerical Addition: If neither is a string, proceed with arithmetic.
             
             // Perform the operation, promoting the result to float if either operand was float.
             float l = L.asFloat();
@@ -414,12 +412,10 @@ private:
             // Determine result type: float if either operand was float, or if result is non-integer
             std::string result_type = (L.type == "float" || R.type == "float" || std::fmod(result, 1.0) != 0.0) ? "float" : "int";
             
-            // --- FIX: The previous code was missing this entire return block ---
             if (result_type == "float") {
                  return EvalResult(std::to_string(result), "float");
             }
             return EvalResult(std::to_string((long long)result), "int");
-            // -----------------------------------------------------------------
         }
 
         // All remaining ops require numbers (-, *, /, %)

@@ -1,6 +1,5 @@
 // KNOWN BUG:
 // print (x + y) does nothing
-// print x + y, if x and y are both 5, prints 55 instead of 10
 
 // TODO: Add while loops, dictionaries, arrays, piping, filters. Add return values in function.hpp.
 // Add "filters" and "piping (->)"
