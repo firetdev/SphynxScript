@@ -15,7 +15,9 @@ func equal(x, y)
     sayNot()
 end
 
+print "Enter number 1: "
 var a = input
+print "Enter number 2: "
 var b = input
 
 equal(a, b)
