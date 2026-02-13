@@ -23,3 +23,5 @@ clock_simulation.sph:  a SphynxScript implementation of my Clock Simulation repo
 scope.sph:  a program to show off SphynxScript's scope management
 
 functions.sph:  an example of SphynxScript functions
+
+exec.sph:  an example of the "exec" function (equivalent of C++ std::system(). Use carefully)

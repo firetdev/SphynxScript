@@ -1,0 +1,3 @@
+var user = "User"
+exec "ls"
+exec "echo Hi ${user}"
