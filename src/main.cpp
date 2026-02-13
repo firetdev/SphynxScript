@@ -36,7 +36,7 @@
 #include "helpers.hpp"
 
 int main() {
-    const std::string scriptFilename = "script.snx";
+    const std::string scriptFilename = "script.sph";
 
     try {
         LineMap scriptLineMap = buildLineMap(scriptFilename);

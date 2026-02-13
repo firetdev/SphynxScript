@@ -88,6 +88,7 @@ private:
     const std::regex assignmentRegex = std::regex(R"(^\s*([a-zA-Z_]\w*)\s*=\s*(.*))");
     const std::regex printRegex = std::regex(R"(^\s*print\s+(.*))");
     const std::regex printlnRegex = std::regex(R"(^\s*println\s+(.*))");
+    const std::regex execRegex = std::regex(R"(^\s*exec\s+(.*))");
     std::regex ifRegex;
 
     // Function regexes
@@ -309,9 +310,8 @@ public:
                 continue;
             }
             
-            // STEP 3: Handle Declarations, Assignments, and Prints
+            // STEP 3: Handle Declarations, Assignments, execs, and Prints
             if (std::regex_match(line, match, declarationRegex)) {
-                
                 std::string varName = match[1].str();
                 std::string expression = match[2].str();
                 
@@ -336,7 +336,6 @@ public:
                 }
 
             } else if (std::regex_match(line, match, assignmentRegex)) {
-                
                 std::string varName = match[1].str();
                 std::string expression = match[2].str();
 
@@ -358,7 +357,6 @@ public:
                 }
                 
             } else if (std::regex_match(line, match, printRegex) || std::regex_match(line, match, printlnRegex)) {
-                
                 std::string expression = match[1].str();
                 bool isPrintln = (line.find("println") != std::string::npos);
 
@@ -375,7 +373,20 @@ public:
                 } else {
                     std::cerr << "Runtime Error in print statement: " << result.value << std::endl;
                 }
-            } 
+            } else if (std::regex_match(line, match, execRegex)) {
+                std::string expression = match[1].str();
+
+                // Substitute and evaluate
+                std::string substitutedExpr = findAndReplaceVariables(expression, variables);
+                EvalResult result = eval.evaluate(substitutedExpr);
+
+                // Run command
+                if (result.type != "error") {
+                    std::system(result.asString().c_str());
+                } else {
+                    std::cerr << "Runtime Error in print statement: " << result.value << std::endl;
+                }
+            }
             // Function call logic
             if (std::regex_match(line, match, funcCallRegex)) {
                 std::string funcName = match[1].str();
