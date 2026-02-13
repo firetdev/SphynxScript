@@ -1,6 +1,3 @@
-// KNOWN BUG:
-// print (x + y) does nothing
-
 // TODO: Add while loops, dictionaries, arrays, piping, filters. Add return values in function.hpp.
 // Add "filters" and "piping (->)"
 // Filter example (end style):

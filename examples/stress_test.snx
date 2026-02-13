@@ -1,0 +1,57 @@
+println "=== SPHYNX LIMIT TEST START ==="
+
+# TEST 1: Basic Arithmetic & Assignment
+var x = 50
+var y = 2
+var result = x * y
+print "Math Check (50 * 2): "
+println result
+
+# TEST 2: Dynamic Style Switching
+# Your engine supports changing the parsing style mid-file.
+# Let's switch from default 'end' to 'brackets'.
+println "Switching to BRACKETS style..."
+
+STYLE = brackets
+
+if result == 100 {
+    println " [OK] Bracket syntax is working!"
+    var inside = 1
+}
+
+# Switch back to standard 'end' style
+STYLE = end
+println "Switched back to END style."
+
+# TEST 3: Function Calls & Scope Persistence
+# The engine wipes scope > 0 on function calls. 
+# We test if 'result' (Global/Scope 0) survives the call.
+
+func stressTest(arg)
+    print " > Inside function with arg: "
+    println arg
+    
+    # Check if we can see global variables
+    # (Note: In this engine, this might fail if scopes are strictly separated, 
+    # but globals usually persist in Scope 0).
+    return
+end
+
+println "Calling stressTest..."
+stressTest(999)
+
+print "Global 'result' after function call: "
+println result
+
+# TEST 4: Nested Control Flow
+# Testing the block parser's ability to handle nested 'end' tokens.
+var depth = 1
+if depth == 1
+    println "Level 1"
+    if depth == 1
+        println "Level 2 (Nested)"
+    end
+end
+
+println "=== ALL TESTS COMPLETED ==="
+END

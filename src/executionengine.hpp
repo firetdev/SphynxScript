@@ -288,69 +288,6 @@ public:
                 continue;
             }
 
-            // Function call logic
-            if (std::regex_match(line, match, funcCallRegex)) {
-                std::string funcName = match[1].str();
-                std::string argsString = match[2].str();
-                
-                if (funcName == "input" || funcName == "print" || funcName == "println" || funcName == "var"
-                    || funcName == "if" || funcName == "GOTO" || funcName == "return" || funcName == "END"
-                    || funcName == "STYLE" || funcName == "func" || funcName == "end" || funcName == "while") {
-                    // Handled elsewhere
-                    programCounter++;
-                    continue;
-                }
-                if (functions.count(funcName)) {
-                    while (scopeLevel > 0) {
-                        decrementScope();  // Wipe scope variables
-                    }
-                    incrementScope();
-                    functionDepth++;
-
-                    const Function& func = functions.at(funcName);
-                    returnStack.push_back(programCounter + 1);
-                    
-                    // Handle Parameters/Arguments
-                    std::vector<std::string> callArgs = splitAndTrimArgs(argsString);
-                    const std::vector<std::string>& funcParams = func.parameters;
-                    
-                    for (size_t i = 0; i < funcParams.size(); ++i) {
-                        std::string paramName = funcParams[i];
-                        EvalResult result;
-                        
-                        if (i < callArgs.size() && !callArgs[i].empty()) {
-                            std::string substitutedArg = findAndReplaceVariables(callArgs[i], variables);
-                            result = eval.evaluate(substitutedArg);
-                        } else {
-                            result.type = "number";
-                            result.value = "0";
-                        }
-                        
-                        if (variables.find(paramName) == variables.end()) {
-                            variables.emplace(paramName, Variable(paramName, scopeLevel));
-                            
-                            if (result.type != "error") {
-                                variables.at(paramName).setValue(result);
-                            } else {
-                                variables.at(paramName).setValue({ "number", "0" });
-                                std::cerr << "Runtime Warning on line " << programCounter << ": Failed to evaluate argument for parameter '" 
-                                          << paramName << "'. Defaulting to 0." << std::endl;
-                            }
-                        } else {
-                            std::cerr << "Runtime Error on line " << programCounter << ": Function parameter '" << paramName 
-                                      << "' conflicts with existing variable in the current scope." << std::endl;
-                        }
-                    }
-
-                    // Goto function body
-                    jumpToLine(func.startingLine + 1); 
-                    continue;
-
-                } else {
-                    std::cerr << "Name Error on line " << programCounter << ": Function '" << funcName << "' is not defined." << std::endl;
-                }
-            }
-
             // GOTO
             if (std::regex_match(line, match, gotoRegex)) {
                 int targetLine = std::stoi(match[1].str());
@@ -439,6 +376,61 @@ public:
                     std::cerr << "Runtime Error in print statement: " << result.value << std::endl;
                 }
             } 
+            // Function call logic
+            if (std::regex_match(line, match, funcCallRegex)) {
+                std::string funcName = match[1].str();
+                std::string argsString = match[2].str();
+
+                if (functions.count(funcName)) {
+                    while (scopeLevel > 0) {
+                        decrementScope();  // Wipe scope variables
+                    }
+                    incrementScope();
+                    functionDepth++;
+
+                    const Function& func = functions.at(funcName);
+                    returnStack.push_back(programCounter + 1);
+                    
+                    // Handle Parameters/Arguments
+                    std::vector<std::string> callArgs = splitAndTrimArgs(argsString);
+                    const std::vector<std::string>& funcParams = func.parameters;
+                    
+                    for (size_t i = 0; i < funcParams.size(); ++i) {
+                        std::string paramName = funcParams[i];
+                        EvalResult result;
+                        
+                        if (i < callArgs.size() && !callArgs[i].empty()) {
+                            std::string substitutedArg = findAndReplaceVariables(callArgs[i], variables);
+                            result = eval.evaluate(substitutedArg);
+                        } else {
+                            result.type = "number";
+                            result.value = "0";
+                        }
+                        
+                        if (variables.find(paramName) == variables.end()) {
+                            variables.emplace(paramName, Variable(paramName, scopeLevel));
+                            
+                            if (result.type != "error") {
+                                variables.at(paramName).setValue(result);
+                            } else {
+                                variables.at(paramName).setValue({ "number", "0" });
+                                std::cerr << "Runtime Warning on line " << programCounter << ": Failed to evaluate argument for parameter '" 
+                                          << paramName << "'. Defaulting to 0." << std::endl;
+                            }
+                        } else {
+                            std::cerr << "Runtime Error on line " << programCounter << ": Function parameter '" << paramName 
+                                      << "' conflicts with existing variable in the current scope." << std::endl;
+                        }
+                    }
+
+                    // Goto function body
+                    jumpToLine(func.startingLine + 1); 
+                    continue;
+
+                } else {
+                    std::cerr << "Name Error on line " << programCounter << ": Function '" << funcName << "' is not defined." << std::endl;
+                }
+            }
             // NOTE: A new 'else' block will go here for unhandled lines (e.g., standalone expression or control flow)
             // For now, any unhandled line is simply skipped, which is fine for your current set of commands.
             programCounter++;
