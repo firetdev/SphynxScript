@@ -21,14 +21,10 @@
 // Array example:
 // arr numbers = [1, 2, 3, 4, 5]
 
-
 #include <iostream>
 #include <string>
 #include <vector>
-#include <fstream>
-#include <cctype>
-#include <regex>
-#include <map>
+#include <stdexcept>
 
 #include "evaluator.hpp"
 #include "executionengine.hpp"
@@ -39,20 +35,13 @@ int main() {
     const std::string scriptFilename = "script.sph";
 
     try {
-        LineMap scriptLineMap = buildLineMap(scriptFilename);
-        
-        if (scriptLineMap.empty()) {
-             // Handle case where file was empty or could not be opened
-             return 1;
-        }
-        
-        // The ExecutionEngine takes the map by const reference in its constructor
-        ExecutionEngine engine(scriptFilename, scriptLineMap);
-        
+        ExecutionEngine engine(scriptFilename);
         engine.run();
-
     } catch (const std::runtime_error& e) {
         std::cerr << "Execution Fatal Error: " << e.what() << "\n";
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "Unexpected Error: " << e.what() << "\n";
         return 1;
     }
 

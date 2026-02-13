@@ -14,38 +14,6 @@
 #include "helpers.hpp"
 #include "function.hpp"
 
-using LineMap = std::map<int, std::streampos>;
-
-LineMap buildLineMap(const std::string& filename) {
-    LineMap lineMap;
-    std::ifstream file(filename);
-
-    if (!file.is_open()) {
-        std::cerr << "Error: Could not open " << filename << "\n";
-        return lineMap;
-    }
-
-    int lineNumber = 1;
-    std::string line;
-
-    while (std::getline(file, line)) {
-        // Record the position of the current line before reading the next one
-        lineMap[lineNumber] = (long long)file.tellg() - (long long)line.length() - 1;
-
-        // Special case for line 1: file.tellg() returns the position *after* the first line
-        // You need to ensure lineMap[1] is 0 (the start of the file).
-        if (lineNumber == 1) {
-            lineMap[1] = 0;
-        }
-
-        lineNumber++;
-    }
-
-    // Close the file stream used for mapping
-    file.close();
-    return lineMap;
-}
-
 // Function to split and trim arguments for function calls
 std::vector<std::string> splitAndTrimArgs(const std::string& paramsString) {
     std::vector<std::string> args;
@@ -68,15 +36,15 @@ private:
     std::map<std::string, Variable> variables;
     std::map<std::string, Function> functions;
     Evaluator eval;
-    std::ifstream file;
-
+    
+    // In-memory source code vector
+    std::vector<std::string> sourceCode;
     std::string fileName;
 
     std::string style = "end";  // "end" or "brackets"
 
     int scopeLevel = 0;  // Tracks current scope level
     int programCounter = 1; // Tracks the current line number for context
-    const std::map<int, std::streampos>& fileLineMap; // Reference to the line map
 
     int functionDepth = 0;
     std::vector<int> returnStack;
@@ -100,7 +68,7 @@ private:
     // Control flow regexes
     const std::regex endRegex = std::regex(R"(^\s*END\s*$)"); // Matches: END
     const std::regex gotoRegex = std::regex(R"(^\s*GOTO\s+(\d+)\s*$)");
-    const std::regex styleRegex = std::regex(R"(^\s*STYLE\s*=\s*([a-z]+)\s*$)");
+    const std::regex styleRegex = std::regex(R"(^\s*STYLE\s*=\s*["']?([a-z]+)["']?\s*$)");
     std::regex closeBlockRegex;
 
     // Helpers
@@ -124,21 +92,31 @@ private:
     }
 
 public:
-    ExecutionEngine(const std::string& filename, const std::map<int, std::streampos>& lineMap) : fileLineMap(lineMap) {
-        file.open(filename);
+    // Constructor loads file into vector
+    ExecutionEngine(const std::string& filename) {
         fileName = filename;
+        std::ifstream file(filename);
         if (!file.is_open()) {
             throw std::runtime_error("Failed to open script file: " + filename);
         }
 
+        // Add a dummy empty string at index 0 so line 1 is at index 1
+        sourceCode.push_back("");
+
+        std::string line;
+        while (std::getline(file, line)) {
+            sourceCode.push_back(line);
+        }
+        file.close();
+
+        // Add a dummy empty string at the end
+        sourceCode.push_back("");
+
         setupStyleRegexes();
     }
 
-    ~ExecutionEngine() {
-        if (file.is_open()) {
-            file.close();
-        }
-    }
+    // Destrcutor
+    ~ExecutionEngine() {}
 
     void registerFunction(std::string name, std::vector<std::string> parameters, int startingLine) {
         if (scopeLevel == 0)
@@ -175,7 +153,10 @@ public:
         std::string line;
         std::smatch match;
 
-        while (std::getline(file, line)) {
+        // Loop iterates through the vector using programCounter
+        while (programCounter < sourceCode.size()) {
+            line = sourceCode[programCounter];
+
             // Set STYLE
             if (std::regex_match(line, match, styleRegex)) {
                 std::string styleInput = match[1];
@@ -192,7 +173,7 @@ public:
                 continue;
             }
             // Skip comments
-            if (line[0] == '#') {
+            if (!line.empty() && line[0] == '#') {
                 programCounter++;
                 continue;
             }
@@ -442,41 +423,30 @@ public:
                     std::cerr << "Name Error on line " << programCounter << ": Function '" << funcName << "' is not defined." << std::endl;
                 }
             }
-            // NOTE: A new 'else' block will go here for unhandled lines (e.g., standalone expression or control flow)
-            // For now, any unhandled line is simply skipped, which is fine for your current set of commands.
+            // Unhandled line simply skips
             programCounter++;
         }
     }
 };
 
 void ExecutionEngine::jumpToLine(int targetLine) {
-    if (fileLineMap.count(targetLine)) {
-        // Set the file pointer (seekg) to the start of the target line
-        file.seekg(fileLineMap.at(targetLine));
-        // Update the program counter
+    if (targetLine >= 0 && targetLine < sourceCode.size()) {
         programCounter = targetLine;
     } else {
+        std::cerr << "Critical Error: Jump to invalid line " << targetLine << std::endl;
         std::exit(EXIT_FAILURE);
     }
 }
 
 int ExecutionEngine::findBlockEnd(int startLine) {
     int currentLine = startLine;
-    int nestedLevel = 1; // We assume we are inside the block already (matched the opening '{')
+    int nestedLevel = 1; // We assume we are inside the block already
 
-    // Use a temporary file stream for safe parsing without disrupting the main execution stream
-    std::ifstream tempFile(fileName); 
-    
-    // Jump the temporary file to the start of the block
-    if (fileLineMap.count(startLine)) {
-        tempFile.seekg(fileLineMap.at(startLine));
-    } else {
-        return -1; // Should not happen if startLine is correct
-    }
+    // Loop through sourceCode vector
+    while (currentLine < sourceCode.size() && nestedLevel > 0) {
+        std::string line = sourceCode[currentLine];
 
-    std::string line;
-    while (nestedLevel > 0 && std::getline(tempFile, line)) {
-        // --- Brace Counting Logic ---
+        // Brace Counting Logic
         if (style == "brackets") {
             for (char c : line) {
                 if (c == '{') {
@@ -484,29 +454,23 @@ int ExecutionEngine::findBlockEnd(int startLine) {
                 } else if (c == '}') {
                     nestedLevel--;
                     if (nestedLevel == 0) {
-                        tempFile.close();
-                        // currentLine is the line number *containing* the closing '}'
                         return currentLine; 
                     }
                 }
             }
         } else if (style == "end") {
             // Detect block openers
-            // Extend this when necessary for other block types
             if (std::regex_match(line, funcDefRegex) ||
                 std::regex_match(line, ifRegex))
             {
                 nestedLevel++;
             }
-
-
             // Detect block close
             else if (std::regex_match(line, closeBlockRegex)) {
                 nestedLevel--;
 
                 if (nestedLevel == 0) {
-                    tempFile.close();
-                    return currentLine;   // the line number containing "end"
+                    return currentLine;
                 }
             }
         }
@@ -514,13 +478,11 @@ int ExecutionEngine::findBlockEnd(int startLine) {
         currentLine++;
     }
 
-    tempFile.close();
     std::cerr << "Syntax Error: Unmatched opening brace starting near line " << startLine - 1 << std::endl;
     return -1; 
 }
 
 // Method inside ExecutionEngine
-
 bool ExecutionEngine::handleIfStatement(const std::string& line) {
     std::smatch match;
 
