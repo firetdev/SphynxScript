@@ -115,7 +115,7 @@ public:
         setupStyleRegexes();
     }
 
-    // Destrcutor
+    // Destructor
     ~ExecutionEngine() {}
 
     void registerFunction(std::string name, std::vector<std::string> parameters, int startingLine) {
